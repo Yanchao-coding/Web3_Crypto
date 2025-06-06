@@ -1,6 +1,10 @@
 import httpx
 from datetime import datetime
 import requests
+from fastapi import APIRouter
+from bs4 import BeautifulSoup
+from modules.config.request_config import BASE_URL, PROJECT_LIST_URL, HEADERS, TOKEN_UNLOCK_URL
+
 
 
 HELIUS_API_KEY = "38a192c2-ea6e-49e9-a177-e3b124d7b026"
@@ -64,119 +68,102 @@ def get_fear_greed_index():
         }
 
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from datetime import datetime
-import time
+def get_token_unlock_schedule():
+    # url = "https://token.unlocks.app/"
+    # headers = {
+    #     "User-Agent": "Mozilla/5.0"
+    # }
 
-# 你的 ChromeDriver 路径
-CHROME_DRIVER_PATH = r"D:\TYC\chromedriver-win64\chromedriver-win64\chromedriver.exe"
-
-# 映射 token 到 URL path
-TOKEN_URL_MAP = {
-    "ARB": "arbitrum",
-    "APT": "aptos",
-    "OP": "optimism",
-    "SUI": "sui",
-    "DYDX": "dydx",
-    "BLUR": "blur",
-    "APE": "apecoin"
-}
-
-
-def get_token_unlock_schedule(token: str):
     try:
-        symbol = token.upper()
-        if symbol not in TOKEN_URL_MAP:
-            return {
-                "status": "error",
-                "message": f"暂不支持 {symbol}，请尝试 ARB、APT、OP 等主流项目"
-            }
+        response = requests.get(TOKEN_UNLOCK_URL, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        token_path = TOKEN_URL_MAP[symbol]
-        url = f"https://tokenomist.ai/{token_path}"
+        # 获取所有 token 数据行
+        rows = soup.find_all("tr", class_="group cursor-pointer border-b-[1px] border-background-secondary bg-background hover:bg-[#F6E8ED] dark:border-background-dark-secondary dark:bg-background-dark hover:dark:bg-[#351226]")
 
-        # 初始化 selenium 浏览器（无头模式）
-        chrome_options = Options()
-        chrome_options.add_argument("--headless=new")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-
-        service = Service(CHROME_DRIVER_PATH)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        driver.get(url)
-
-        # 等待页面加载数据
-        time.sleep(5)
-
-        # 查找 unlock schedule 表格
-        rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
-        unlock_schedule = []
-
+        result = []
         for row in rows:
-            cols = row.find_elements(By.TAG_NAME, "td")
-            if len(cols) < 3:
-                continue
+            cols = row.find_all("td")
+            texts = [col.get_text(strip=True) for col in cols]
 
-            date_str = cols[0].text.strip()
-            amount_str = cols[2].text.strip().replace(",", "").replace("$", "")
+            if len(texts) >= 9:
+                item = {
+                    "name": texts[0],
+                    "price": texts[1],
+                    "24h_change": texts[2],
+                    "market_cap": texts[3],
+                    "circulating_supply": texts[4],
+                    "released_percentage": texts[5],
+                    "upcoming_unlock": texts[6],
+                    "next_7d_emission": texts[7],
+                }
+                result.append(item)
 
-            try:
-                unlock_date = datetime.strptime(date_str, "%b %d, %Y")
-                if unlock_date.date() < datetime.today().date():
-                    continue
-            except:
-                continue
-
-            try:
-                amount = float(amount_str)
-            except:
-                continue
-
-            unlock_schedule.append({
-                "date": unlock_date.strftime("%Y-%m-%d"),
-                "amount": round(amount, 2)
-            })
-
-            if len(unlock_schedule) >= 5:
-                break
-
-        driver.quit()
-
-        return {
-            "status": "success",
-            "token": symbol,
-            "unlock_schedule": unlock_schedule
-        }
+        return {"status": "success", "data": result}
 
     except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        return {"status": "error", "message": str(e)}
 
 
 
-def get_funding_info(project_name: str):
-    return {
-        "status": "success",
-        "project": project_name,
-        "funding_rounds": [
-            {
-                "round": "Seed",
-                "amount": "2M USD",
-                "date": "2021-08-01",
-                "investors": ["a16z", "Binance Labs"]
-            },
-            {
-                "round": "Series A",
-                "amount": "10M USD",
-                "date": "2022-06-15",
-                "investors": ["Sequoia", "Paradigm"]
-            }
-        ]
-    }
+def get_project_slug_dict() -> dict:
+    """
+    获取所有项目的名称和对应的 slug（英文路径）
+    返回示例：{"Bondex": "bondex", "Sui": "sui"}
+    """
+    response = requests.get(PROJECT_LIST_URL, headers=HEADERS)
+    if response.status_code != 200:
+        return {"error": f"请求失败，状态码：{response.status_code}"}
 
+    soup = BeautifulSoup(response.text, "html.parser")
+    project_links = soup.select("a.style_cell-name__body__QGvIk")
 
+    project_dict = {}
+    for link in project_links:
+        slug = link.get("href").split("/")[-2]
+        name_div = link.select_one("div > div.style_cell-name__sub__LHMAg")
+        if name_div:
+            name = name_div.get_text(strip=True)
+            project_dict[name] = slug
+
+    return project_dict
+
+def get_funding_info_by_slug(slug: str) -> list:
+    """
+    给定项目 slug（如 'bondex'），返回该项目的融资信息（从 Vesting Description 表格中提取）
+    """
+    url = f"{BASE_URL}/projects/{slug}/"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code != 200:
+        return {"error": f"请求失败，状态码：{response.status_code}"}
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # 精确定位包含融资信息的表格
+    target_table = None
+    for table in soup.find_all("table"):
+        if "Stage" in table.get_text() and "Vesting Period" in table.get_text():
+            target_table = table
+            break
+
+    if not target_table:
+        return {"error": "未找到融资信息表格"}
+
+    result = []
+    rows = target_table.find("tbody").find_all("tr")
+
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) < 5:
+            continue
+
+        result.append({
+            "stage": cols[0].get_text(strip=True),
+            "price": cols[1].get_text(strip=True),
+            "total_raise": cols[2].get_text(strip=True),
+            "valuation": cols[3].get_text(strip=True),
+            "vesting": cols[4].get_text(strip=True)
+        })
+
+    return result

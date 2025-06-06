@@ -28,30 +28,38 @@ api_config = {
         "nickname": "情绪指数助手"
     },
     "get_token_unlock_schedule": {
-        "id": "a004",
         "package": "modules.apis.api_funcs",
         "func_name": "get_token_unlock_schedule",
-        "param": {"token": ""},
-        "desc_prompt_eng": "Get token unlock schedule by token symbol.",
-        "desc_prompt_chn": "根据币种符号查询未来的解锁时间表。",
-        "pretify_func": None,
-        "hidden_params": {},
-        "auth_require_level": 0,
-        "make_sure_notice": [],
-        "nickname": "代币解锁助手"
+        "param": {},  # 无需传参
+        "nickname": "Token 解锁信息查询",
+        "desc_prompt_chn": "获取近期的 Token 解锁数据",
+        "desc_prompt_eng": "Fetch token unlock schedule data"
     },
-    "get_funding_info": {
-        "id": "a005",
+    "get_project_slug_dict": {
+        "id": "a006",
         "package": "modules.apis.api_funcs",
-        "func_name": "get_funding_info",
-        "param": {"project_name": ""},
-        "desc_prompt_eng": "Get funding history of a crypto project.",
-        "desc_prompt_chn": "查询加密项目的融资历史记录。",
+        "func_name": "get_project_slug_dict",
+        "param": {},
+        "desc_prompt_eng": "Get all crypto project slugs.",
+        "desc_prompt_chn": "获取所有加密项目的 slug 列表。",
         "pretify_func": None,
         "hidden_params": {},
         "auth_require_level": 0,
         "make_sure_notice": [],
-        "nickname": "融资信息助手"
+        "nickname": "项目 slug 列表"
+    },
+    "get_funding_info_by_slug": {
+        "id": "a007",
+        "package": "modules.apis.api_funcs",
+        "func_name": "get_funding_info_by_slug",
+        "param": {"slug": ""},
+        "desc_prompt_eng": "Get funding info by slug.",
+        "desc_prompt_chn": "通过 slug 获取融资信息。",
+        "pretify_func": None,
+        "hidden_params": {},
+        "auth_require_level": 0,
+        "make_sure_notice": [],
+        "nickname": "融资详情查 slug"
     }
 
 

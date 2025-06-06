@@ -1,0 +1,12 @@
+# 忽略测试脚本
+test.py
+test_requests.py
+
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 忽略虚拟环境（如果有）
+venv/
+.env/
